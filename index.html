@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Train timer</title>
+
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://bootswatch.com/journal/bootstrap.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+	<style type="text/css">
+		table {
+			border-collapse: collapse;
+		}
+		tr { 
+			border: solid;
+			border-width: 1px 0;
+		}
+		tr:first-child {
+			border-top: none;
+		}
+		tr:last-child {
+			border-bottom: none;
+		}
+	</style>
+</head>
+<body>
+
+	<div class="container">
+		<div class="jumbotron text-center">
+			<h1>Train timer!</h1>
+		</div>
+
+		<div class="row">
+			<div class="col-sm-12">
+				<div class="panel panel-primary">
+					<div class="panel-heading">
+						Train schedule!
+					</div>
+					<div class="panel-body">
+						<table id="trainTable" style="width:100%">
+							<tr>
+								<th>Train Name</th>
+								<th>Destination</th>
+								<th>Frequency</th>
+								<th>Next Arrival</th>
+								<th>Minutes Away</th>
+								<th>Edit?</th>
+								<th>Delete</th>
+							</tr>
+						</table>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="col-sm-12">
+				<div class="panel panel-primary">
+					<div class="panel-heading">
+						Add a new train!
+					</div>
+					<div class="panel-body">
+						<form id="trainForm" style="width:100%">
+							<div class="form-group">
+								<label for="nameInput">Name:</label>
+								<input class="form-control" id="nameInput" type="text" required>
+							</div>
+							<div class="form-group">
+								<label for="destinationInput">Destination:</label>
+								<input class="form-control" id="destinationInput" type="text" required>
+							</div>
+							<div class="form-group">
+								<label for="frequencyInput">Frequency (minutes):</label>
+								<input class="form-control" id="frequencyInput" type="number" required>
+							</div>
+							<div class="form-group">
+								<label for="firstTrainInput">First Train Time (HH:mm - military time):</label>
+								<input class="form-control" id="firstTrainInput" required>
+							</div>
+							<button class="btn btn-default" id="addTrain" type="submit">Submit</button>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	
+	<script src="https://www.gstatic.com/firebasejs/4.1.1/firebase.js"></script>
+	<script>
+		var config = {
+			apiKey: "AIzaSyC8h7ZDDUVM6lJgzHala4-PNtpM4jf_A0U",
+			authDomain: "train-timer-1bc06.firebaseapp.com",
+			databaseURL: "https://train-timer-1bc06.firebaseio.com",
+			projectId: "train-timer-1bc06",
+			storageBucket: "train-timer-1bc06.appspot.com",
+			messagingSenderId: "246127188165"
+		};
+		firebase.initializeApp(config);
+		var database = firebase.database();
+		var trainRef = database.ref('trains');
+	</script>
+
+	<script src="https://code.jquery.com/jquery.js"></script>
+	<script src="https://momentjs.com/downloads/moment.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js"></script>
+	<script>
+		trainRef.on('value', function(snapshot) {
+			buildTable(snapshot);
+		});
+		function buildTable(snapshot) {
+			//Blows up existing table
+			$("#trainTable td").remove();
+			//console.log(snapshot.val());
+			snapshot.forEach(function (trainSnapshot) {
+				var key = trainSnapshot.key;
+				var trainObject = trainSnapshot.val();
+				var trainTiming = nextArrival(trainObject);
+				$("#trainTable").append($("<tr>").append($("<td>").text(trainObject.name)).append($("<td>").text(trainObject.destination)).append($("<td>").text(trainObject.frequency)).append($("<td>").text(trainTiming[0])).append($("<td>").text(trainTiming[1])).append($("<td>").text("edit")).append($("<td>").text("delete")));
+			});
+		}
+		function nextArrival(train) {
+			//Moment wants a date, so I assume all of these are today and in PDT...
+			var firstTime = moment(moment().format("YYYY-MM-DD") +" "+ train.firstTrain,"YYYY-MM-DD HH:mm");
+			var now = moment();
+			var nextTrain = firstTime;
+			//Keeps selecting the next train (based on frequency) until it finds a train in the future
+			while (nextTrain.diff(now) < 0) {
+				nextTrain.add(train.frequency, 'minutes');
+			}
+			//console.log(nextTrain);
+			//console.log(now);
+			return [nextTrain.format("HH:mm"), nextTrain.diff(now,'minutes')]
+		}
+		$("#addTrain").on("click", function() {
+			event.preventDefault();
+			if (checkForm()) {
+				var newTrainRef = trainRef.push();
+				newTrainRef.set({
+					name: $("#nameInput").val().trim(),
+					destination: $("#destinationInput").val().trim(),
+					frequency: Number($("#frequencyInput").val().trim()),
+					firstTrain: $("#firstTrainInput").val().trim()
+				});
+			}
+		});
+		function checkForm() {
+			re = /^(\d{1,2}):(\d{2})?$/;
+			if($("#firstTrainInput").val() != '') {
+				if(regs = $("#firstTrainInput").val().match(re)) {
+					if (regs[1] > 23) {
+						alert("Invalid value for hours: " + regs[1]);
+						$("#firstTrainInput").focus();
+						return false;
+					}
+
+					if (regs[2] > 59) {
+						alert("Invalid value for minutes: " + regs[2]);
+						$("#firstTrainInput").focus();
+						return false;
+					}
+				} else {
+					alert("Invalid time format: " + $("#firstTrainInput").val());
+					$("#firstTrainInput").focus();
+					return false;
+				}
+			}
+			return true;
+		}
+		
+		//Should update the table every minute. In theory, you could build this just looping through the existing table (and avoid the firebase call), but I already wrote the code above
+		var interval = setInterval(function() {
+			trainRef.once("value", function(snap) {
+				buildTable(snap);
+			});
+		}, 60*1000);
+
+	</script>
+</body>
+</html>
