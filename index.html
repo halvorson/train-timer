@@ -21,6 +21,13 @@
 		tr:last-child {
 			border-bottom: none;
 		}
+		.delete, .edit, .save {
+			margin: 5px;
+			padding: 2px 5px;
+		}
+		.save {
+			color: primary;
+		}
 	</style>
 </head>
 <body>
@@ -42,6 +49,7 @@
 								<th>Train Name</th>
 								<th>Destination</th>
 								<th>Frequency</th>
+								<th>First Arrival</th>
 								<th>Next Arrival</th>
 								<th>Minutes Away</th>
 								<th>Edit?</th>
@@ -103,13 +111,13 @@
 	</script>
 
 	<script src="https://code.jquery.com/jquery.js"></script>
-	<script src="https://momentjs.com/downloads/moment.min.js"></script>
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js"></script>
 	<script>
 		trainRef.on('value', function(snapshot) {
 			buildTable(snapshot);
 		});
+		var editLock = false;
 		function buildTable(snapshot) {
 			//Blows up existing table
 			$("#trainTable td").remove();
@@ -118,7 +126,7 @@
 				var key = trainSnapshot.key;
 				var trainObject = trainSnapshot.val();
 				var trainTiming = nextArrival(trainObject);
-				$("#trainTable").append($("<tr>").append($("<td>").text(trainObject.name)).append($("<td>").text(trainObject.destination)).append($("<td>").text(trainObject.frequency)).append($("<td>").text(trainTiming[0])).append($("<td>").text(trainTiming[1])).append($("<td>").text("edit")).append($("<td>").text("delete")));
+				$("#trainTable").append($("<tr>").data('fbKey',key).append($("<td>").text(trainObject.name)).append($("<td>").text(trainObject.destination)).append($("<td>").text(trainObject.frequency)).append($("<td>").text(trainObject.firstTrain)).append($("<td>").text(trainTiming[0])).append($("<td>").text(trainTiming[1])).append($("<td>").append($("<button>").text("Edit").addClass("edit btn btn-default"))).append($("<td>").append($("<button>").text("Delete").addClass("delete btn btn-default"))));
 			});
 		}
 		function nextArrival(train) {
@@ -137,12 +145,12 @@
 		$("#addTrain").on("click", function() {
 			event.preventDefault();
 			if (checkForm()) {
-				var newTrainRef = trainRef.push();
-				newTrainRef.set({
+				var newTrainRef = trainRef.push({
 					name: $("#nameInput").val().trim(),
 					destination: $("#destinationInput").val().trim(),
 					frequency: Number($("#frequencyInput").val().trim()),
-					firstTrain: $("#firstTrainInput").val().trim()
+					firstTrain: $("#firstTrainInput").val().trim(),
+					dateAdded: firebase.database.ServerValue.TIMESTAMP
 				});
 			}
 		});
@@ -167,15 +175,54 @@
 					return false;
 				}
 			}
+			if($("#frequencyInput").val() <= 0) {
+				alert("Invalid frequency. Must be greater than 0");
+				$("#frequencyInput").focus();
+				return false;
+			}
 			return true;
 		}
-		
+		function deleteTrain() {
+			//console.log($(this).parent().parent());
+			var thisTrainKey = $(this).parent().parent().data("fbKey");
+			var thisTrainRef = trainRef.child(thisTrainKey);
+			//console.log(thisTrainRef);
+			thisTrainRef.remove().then(function() {
+				console.log("Deleted");
+			}).catch(function(error) {
+				console.log(error);
+			});
+		}
+		function makeEditable() {
+			$(this).parent().siblings(":nth-child(-n+4)").attr('contenteditable', "true").css('color', 'red');
+			$(this).text("Save").addClass("save btn btn-primary").removeClass("edit btn btn-default");
+			$(".edit").prop("disabled",true);
+		}
+
+		function save() {
+			var thisTrainKey = $(this).parent().parent().data("fbKey");
+			var thisTrainRef = trainRef.child(thisTrainKey);
+			thisTrainRef.set({
+				name: $(this).parent().siblings(":nth-of-type(1)").text().trim(),
+				destination: $(this).parent().siblings(":nth-of-type(2)").text().trim(),
+				frequency: Number($(this).parent().siblings(":nth-of-type(3)").text().trim()),
+				firstTrain: $(this).parent().siblings(":nth-of-type(4)").text().trim(),
+				dateModified: firebase.database.ServerValue.TIMESTAMP
+			});
+			$(".edit").prop("disabled",false);
+		}
+
 		//Should update the table every minute. In theory, you could build this just looping through the existing table (and avoid the firebase call), but I already wrote the code above
 		var interval = setInterval(function() {
 			trainRef.once("value", function(snap) {
 				buildTable(snap);
 			});
 		}, 60*1000);
+
+		$(document).on("click", ".delete", deleteTrain);
+		$(document).on("click", ".edit", makeEditable);
+		$(document).on("click", ".save", save);
+
 
 	</script>
 </body>
