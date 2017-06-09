@@ -26,8 +26,20 @@
 			padding: 2px 5px;
 		}
 		.save {
-			color: primary;
 		}
+		.editableContent {
+			color: red;
+			background-color: #ddd;
+			margin: 2px 2px 2px 5px;
+			padding: 2px;
+			border-style: solid;
+			border-color: black;
+			border-width: 1px;
+		}
+		.editableContent:focus {
+			background-color: white;
+		}
+
 	</style>
 </head>
 <body>
@@ -194,21 +206,38 @@
 			});
 		}
 		function makeEditable() {
-			$(this).parent().siblings(":nth-child(-n+4)").attr('contenteditable', "true").css('color', 'red');
-			$(this).text("Save").addClass("save btn btn-primary").removeClass("edit btn btn-default");
+			$(this).parent().siblings(":nth-child(-n+4)").attr('contenteditable', "true").addClass('editableContent');
+			$(this).text("Save").removeClass("edit btn btn-default").addClass("save btn btn-primary");
 			$(".edit").prop("disabled",true);
 		}
 
 		function save() {
 			var thisTrainKey = $(this).parent().parent().data("fbKey");
 			var thisTrainRef = trainRef.child(thisTrainKey);
-			thisTrainRef.set({
+			var trainFBObject = {
 				name: $(this).parent().siblings(":nth-of-type(1)").text().trim(),
 				destination: $(this).parent().siblings(":nth-of-type(2)").text().trim(),
 				frequency: Number($(this).parent().siblings(":nth-of-type(3)").text().trim()),
 				firstTrain: $(this).parent().siblings(":nth-of-type(4)").text().trim(),
 				dateModified: firebase.database.ServerValue.TIMESTAMP
-			});
+			}
+			thisTrainRef.set(trainFBObject);
+			$(".edit").prop("disabled",false);
+		}
+
+		//The stupid parent -> children exists because "siblings" won't pick up the field I'm in, which leads to some issues
+		function saveFromInput() {
+			var thisTrainKey = $(':focus').parent().data("fbKey");
+			var thisTrainRef = trainRef.child(thisTrainKey);
+			var trainFBObject = {
+				name: $(':focus').parent().children(":nth-of-type(1)").text().trim(),
+				destination: $(':focus').parent().children(":nth-of-type(2)").text(),
+				frequency: Number($(':focus').parent().children(":nth-of-type(3)").text().trim()),
+				firstTrain: $(':focus').parent().children(":nth-of-type(4)").text().trim(),
+				dateModified: firebase.database.ServerValue.TIMESTAMP
+			}
+			//console.log(trainFBObject);
+			thisTrainRef.set(trainFBObject);
 			$(".edit").prop("disabled",false);
 		}
 
@@ -222,6 +251,15 @@
 		$(document).on("click", ".delete", deleteTrain);
 		$(document).on("click", ".edit", makeEditable);
 		$(document).on("click", ".save", save);
+
+		//Enter code should save now...
+		$(document).keypress(function (e) {
+			if ($(".editableContent:focus") && (e.keyCode === 13)) {
+				e.preventDefault();
+				//console.log($(':focus'));
+				saveFromInput();
+			}
+		});
 
 
 	</script>
